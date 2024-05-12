@@ -1,11 +1,12 @@
-import { useMutation } from '@tanstack/react-query'
-import { addStudent } from 'apis/student.api'
-import { useMemo, useState } from 'react'
-import { useMatch } from 'react-router-dom'
+import { useMutation, useQuery } from '@tanstack/react-query'
+import { addStudent, getStudent, updateStudent } from 'apis/student.api'
+import { useEffect, useMemo, useState } from 'react'
+import { useMatch, useParams } from 'react-router-dom'
+import { toast } from 'react-toastify'
 import { Student } from 'types/student.type'
 import { isAxiosError } from 'utils/util'
 
-type FormStateType = Omit<Student, 'id'>
+type FormStateType = Omit<Student, 'id'> | Student
 
 type FormError =
   | {
@@ -27,50 +28,93 @@ export default function AddStudent() {
   const [form, setForm] = useState<FormStateType>(initForm)
   const addMatch = useMatch('/students/add')
   const isAddMode = Boolean(addMatch)
-  const { mutate, error, data, reset, mutateAsync } = useMutation({
-    mutationFn: (body: FormStateType) => {
-      //handle data here
-      return addStudent(body)
+  const { id } = useParams()
+  // const { mutate, error, data, reset } = useMutation({
+  //   mutationFn: (body: FormStateType) => {
+  //     //handle data here
+  //     return addStudent(body)
+  //   }
+  // })
+
+  const addMutationStudent = useMutation({
+    mutationFn: (form: FormStateType) => addStudent(form)
+  })
+
+  const updateMutationStudent = useMutation({
+    mutationFn: (form: Student) => {
+      return updateStudent(id as string, form)
     }
   })
 
+  const { data: dataStudent, isSuccess } = useQuery({
+    queryKey: ['student', id],
+    queryFn: () => getStudent(id as string),
+    enabled: id !== undefined
+  })
+
+  useEffect(() => {
+    if (isSuccess) {
+      setForm(dataStudent?.data)
+    }
+  }, [dataStudent, dataStudent?.data, isSuccess])
+
   const errorForm: FormError = useMemo(() => {
+    const error = isAddMode ? addMutationStudent.error : updateMutationStudent.error
     if (isAxiosError<{ error: FormError }>(error) && error.response?.status === 422) {
       return error.response?.data.error //error chính là data
     }
     return null
-  }, [error])
+  }, [addMutationStudent.error, updateMutationStudent.error, isAddMode])
 
   const handleChange = (name: keyof FormStateType) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [name]: event.target.value }))
-    if (data || error) {
-      reset() //ko nhận và ko return về gì cả
+    if (addMutationStudent.data || addMutationStudent.error) {
+      addMutationStudent.reset() //ko nhận và ko return về gì cả
     }
   }
 
-  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+  const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault()
-    try {
-      await mutateAsync(form) //thằng này return về promise
-      setForm(initForm)
-    } catch (error) {
-      console.log(error)
-    }
+    // try {
+    //   if (isAddMode) {
+    //     mutateUpdate()
+    //   } else {
+    //     await mutateAsync(form) //thằng này return về promise
+    //   }
+    //   setForm(initForm)
+    // } catch (error) {
+    //   console.log(error)
+    // } nhớ xài cùng async
     //mutate là async func nhưng méo phải promise
-    // mutate(
-    //   form
-    //   // ,
-    //   // {
-    //   //   onSuccess: () => {
-    //   //     setForm(initForm)
-    //   //   }
-    //   // } cách 1
-    //   //    ,{
-    //   //   onError: (error) => {
-    //   //     console.log(error)
-    //   //   }
-    //   // } có thể xài error như vậy
-    // )
+    if (!isAddMode) {
+      updateMutationStudent.mutate(form as Student, {
+        onSuccess: (_) => {
+          toast.success('Update student successfully')
+          setForm(initForm)
+        }
+      })
+    } else {
+      addMutationStudent.mutate(
+        form as Omit<Student, 'id'>,
+        {
+          onSuccess: (_) => {
+            toast.success('Add student successfully')
+            setForm(initForm)
+          }
+        }
+        // ,
+        // {
+        //   onSuccess: () => {
+        //     setForm(initForm)
+        //   }
+        // } cách 1
+        //    ,{
+        //   onError: (error) => {
+        //     console.log(error)
+        //   }
+        // } có thể xài error như vậy
+      )
+    }
   }
 
   return (
@@ -108,8 +152,8 @@ export default function AddStudent() {
                   id='gender-1'
                   type='radio'
                   name='gender'
-                  value='male'
-                  checked={form.gender === 'male'}
+                  value='Male'
+                  checked={form.gender === 'Male'}
                   onChange={handleChange('gender')}
                   className='h-4 w-4 border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500'
                 />
@@ -122,8 +166,8 @@ export default function AddStudent() {
                   id='gender-2'
                   type='radio'
                   name='gender'
-                  value='female'
-                  checked={form.gender === 'female'}
+                  value='Female'
+                  checked={form.gender === 'Female'}
                   onChange={handleChange('gender')}
                   className='h-4 w-4 border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500'
                 />
@@ -136,8 +180,8 @@ export default function AddStudent() {
                   id='gender-3'
                   type='radio'
                   name='gender'
-                  value='other'
-                  checked={form.gender === 'other'}
+                  value='Other'
+                  checked={form.gender === 'Other'}
                   onChange={handleChange('gender')}
                   className='h-4 w-4 border-gray-300 bg-gray-100 text-blue-600 focus:ring-2 focus:ring-blue-500'
                 />
@@ -247,7 +291,7 @@ export default function AddStudent() {
           type='submit'
           className='w-full rounded-lg bg-blue-700 px-5 py-2.5 text-center text-sm font-medium text-white hover:bg-blue-800 focus:outline-none focus:ring-4 focus:ring-blue-300'
         >
-          Submit
+          {isAddMode ? 'Add' : 'Update'}
         </button>
       </form>
     </div>

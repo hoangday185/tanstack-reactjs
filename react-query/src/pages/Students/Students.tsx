@@ -1,8 +1,9 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
-import { getStudentList } from 'apis/student.api'
+import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { deleteStudent, getStudentList } from 'apis/student.api'
 import classNames from 'classnames'
 
 import { Link } from 'react-router-dom'
+import { toast } from 'react-toastify'
 
 import { useQueryString } from 'utils/util'
 
@@ -34,6 +35,16 @@ export default function Students() {
 
   const totalStudentList = Number(data?.headers['x-total-count'] || 0)
   const totalPage = Math.ceil(totalStudentList / LIMIT_PAGE)
+
+  const deleteStudentMutation = useMutation({
+    mutationFn: (id: string | number) => deleteStudent(id)
+  })
+
+  const handleDeleteStudent = (id: number) => {
+    deleteStudentMutation.mutate(id)
+
+    toast.success('Delete student success')
+  }
 
   return (
     <div>
@@ -103,12 +114,18 @@ export default function Students() {
                     <td className='py-4 px-6'>{student.email}</td>
                     <td className='py-4 px-6 text-right'>
                       <Link
-                        to='/students/1'
+                        to={`/students/${student.id}`}
                         className='mr-5 font-medium text-blue-600 hover:underline dark:text-blue-500'
                       >
                         Edit
                       </Link>
-                      <button className='font-medium text-red-600 dark:text-red-500'>Delete</button>
+                      <button
+                        type='button'
+                        className='font-medium text-red-600 dark:text-red-500'
+                        onClick={() => handleDeleteStudent(student.id)}
+                      >
+                        Delete
+                      </button>
                     </td>
                   </tr>
                 ))}
