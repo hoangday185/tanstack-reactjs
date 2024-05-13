@@ -1,11 +1,10 @@
-import { QueryClient, useMutation, useQuery } from '@tanstack/react-query'
-import { addStudent, getStudent, updateStudent } from 'apis/student.api'
-import { useEffect, useMemo, useState } from 'react'
 import { useMatch, useParams } from 'react-router-dom'
-import { toast } from 'react-toastify'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { addStudent, getStudent, updateStudent } from 'apis/student.api'
 import { Student } from 'types/student.type'
+import { useEffect, useMemo, useState } from 'react'
 import { isAxiosError } from 'utils/util'
-
+import { toast } from 'react-toastify'
 type FormStateType = Omit<Student, 'id'> | Student
 
 type FormError =
@@ -29,49 +28,45 @@ export default function AddStudent() {
   const addMatch = useMatch('/students/add')
   const isAddMode = Boolean(addMatch)
   const { id } = useParams()
+  const queryClient = useQueryClient()
   // const { mutate, error, data, reset } = useMutation({
   //   mutationFn: (body: FormStateType) => {
   //     //handle data here
   //     return addStudent(body)
   //   }
   // })
-  const queryClient = new QueryClient()
-  const addMutationStudent = useMutation({
-    mutationFn: (_) => addStudent(form),
-    onSuccess: (data) => {
-      queryClient.setQueryData(['student', id], data)
-    }
-  })
 
-  const updateMutationStudent = useMutation({
-    mutationFn: (form: Student) => {
-      return updateStudent(id as string, form)
-    },
-    onSuccess: (data) => {
-      queryClient.setQueryData(['student', id], data)
-    }
+  const addMutationStudent = useMutation({
+    mutationFn: (body: FormStateType) => addStudent(body)
   })
 
   const getStudentById = useQuery({
     queryKey: ['student', id],
     queryFn: () => getStudent(id as string),
     enabled: id !== undefined,
-    staleTime: 10 * 1000
+    staleTime: 1000 * 10
   })
 
   useEffect(() => {
-    if (getStudentById.isSuccess) {
+    if (getStudentById.data) {
       setForm(getStudentById.data.data)
     }
-  }, [getStudentById.data, getStudentById.isSuccess])
+  }, [getStudentById.data])
+
+  const updateStudentMutation = useMutation({
+    mutationFn: (_) => updateStudent(id as string, form as Student),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['student', id], data)
+    }
+  })
 
   const errorForm: FormError = useMemo(() => {
-    const error = isAddMode ? addMutationStudent.error : updateMutationStudent.error
+    const error = isAddMode ? addMutationStudent.error : updateStudentMutation.error
     if (isAxiosError<{ error: FormError }>(error) && error.response?.status === 422) {
       return error.response?.data.error //error chính là data
     }
     return null
-  }, [addMutationStudent.error, updateMutationStudent.error, isAddMode])
+  }, [addMutationStudent.error, updateStudentMutation.error, isAddMode])
 
   const handleChange = (name: keyof FormStateType) => (event: React.ChangeEvent<HTMLInputElement>) => {
     setForm((prev) => ({ ...prev, [name]: event.target.value }))
@@ -93,32 +88,31 @@ export default function AddStudent() {
     //   console.log(error)
     // } nhớ xài cùng async
     //mutate là async func nhưng méo phải promise
-    if (!isAddMode) {
-      updateMutationStudent.mutate(form as Student, {
+    if (isAddMode) {
+      addMutationStudent.mutate(form, {
+        onSuccess: (_) => {
+          setForm(initForm)
+          toast.success('Add student successfully')
+        }
+      })
+    } else {
+      updateStudentMutation.mutate(undefined, {
         onSuccess: (_) => {
           toast.success('Update student successfully')
         }
       })
-    } else {
-      addMutationStudent.mutate(
-        undefined,
-        {
-          onSuccess: (_) => {
-            toast.success('Add student successfully')
-          }
-        }
-        // ,
-        // {
-        //   onSuccess: () => {
-        //     setForm(initForm)
-        //   }
-        // } cách 1
-        //    ,{
-        //   onError: (error) => {
-        //     console.log(error)
-        //   }
-        // } có thể xài error như vậy
-      )
+
+      // ,
+      // {
+      //   onSuccess: () => {
+      //     setForm(initForm)
+      //   }
+      // } cách 1
+      //    ,{
+      //   onError: (error) => {
+      //     console.log(error)
+      //   }
+      // } có thể xài error như vậy
     }
   }
 

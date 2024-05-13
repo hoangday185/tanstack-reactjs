@@ -1,6 +1,7 @@
-import { QueryClient, keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { QueryClient, keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { deleteStudent, getStudent, getStudentList } from 'apis/student.api'
 import classNames from 'classnames'
+import { get } from 'http'
 
 import { Link } from 'react-router-dom'
 import { toast } from 'react-toastify'
@@ -23,17 +24,21 @@ export default function Students() {
   //       setIsLoading(false)
   //     })
   // }, [])
-  const queryClient = new QueryClient()
+  const queryClient = useQueryClient()
   const queryString: { page?: string } = useQueryString()
   const page = Number(queryString.page) || 1
   const getStudentListQuery = useQuery({
     queryKey: ['students', page], //cơ chế so sánh 2 object là dùng deep compare keys (dùng object nested cỡ nào cũng so sánh được)
-    queryFn: () => getStudentList(page, LIMIT_PAGE)
+    queryFn: () => {
+      const controller = new AbortController()
+      // setTimeout(() => controller.abort(), 5000)
+      return getStudentList(page, LIMIT_PAGE, controller.signal)
+    },
+    retry: 0
     // staleTime: 60 * 1000, //thời gian data cũ
     // gcTime: 5 * 1000, //cache time
     //placeholderData: keepPreviousData //giữ data cũ khi fetch data mới
   }) //đây là query instance
-  console.log(getStudentListQuery)
   const totalStudentList = Number(getStudentListQuery?.data?.headers['x-total-count'] || 0)
   const totalPage = Math.ceil(totalStudentList / LIMIT_PAGE)
 
@@ -53,9 +58,40 @@ export default function Students() {
     await queryClient.prefetchQuery({ queryKey: ['student', String(id)], queryFn: () => getStudent(id) })
   }
 
+  const fetachStudent = (second: number) => {
+    const id = '6'
+    queryClient.fetchQuery({
+      queryKey: ['students', String(id)],
+      queryFn: () => getStudent(id),
+      staleTime: second * 1000
+    })
+  }
+
+  const refetchStudent = () => {
+    getStudentListQuery.refetch()
+  }
+
+  const cancelCallAPI = () => {
+    queryClient.cancelQueries({ queryKey: ['students', page], exact: true })
+  }
+
   return (
     <div>
       <h1 className='text-lg'>Students</h1>
+      <div style={{ display: 'flex', justifyContent: 'space-around', alignItems: 'center' }}>
+        <button className='mt-6 rounded bg-blue-500 px-5 py-2 text-white' onClick={() => fetachStudent(2)}>
+          Click 2s
+        </button>
+        <button className='mt-6 rounded bg-blue-500 px-5 py-2 text-white' onClick={() => fetachStudent(10)}>
+          Click 10s
+        </button>
+        <button className='mt-6 rounded bg-pink-500 px-5 py-2 text-white' onClick={refetchStudent}>
+          Refetch student
+        </button>
+        <button className='mt-6 rounded bg-pink-500 px-5 py-2 text-white' onClick={cancelCallAPI}>
+          cancel refetch student
+        </button>
+      </div>
       <div className='mt-6'>
         <Link
           to='/students/add'

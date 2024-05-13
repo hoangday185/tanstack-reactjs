@@ -1,3 +1,5 @@
+import { useIsFetching, useIsMutating } from '@tanstack/react-query'
+import Loading from 'Component/Loading'
 import MainLayout from 'layouts/MainLayout'
 import About from 'pages/About'
 import AddStudent from 'pages/AddStudent'
@@ -36,8 +38,12 @@ function App() {
     }
   ])
 
+  const isFetching = useIsFetching() //isFetching is a number
+  const isMutating = useIsMutating() //isMutating is a number
+
   return (
     <div className='App'>
+      {isFetching + isMutating != 0 && <Loading />}
       <ToastContainer />
       <MainLayout>{elements}</MainLayout>
     </div>
