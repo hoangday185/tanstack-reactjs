@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from '@tanstack/react-query'
+import { QueryClient, useMutation, useQuery } from '@tanstack/react-query'
 import { addStudent, getStudent, updateStudent } from 'apis/student.api'
 import { useEffect, useMemo, useState } from 'react'
 import { useMatch, useParams } from 'react-router-dom'
@@ -35,28 +35,35 @@ export default function AddStudent() {
   //     return addStudent(body)
   //   }
   // })
-
+  const queryClient = new QueryClient()
   const addMutationStudent = useMutation({
-    mutationFn: (form: FormStateType) => addStudent(form)
+    mutationFn: (_) => addStudent(form),
+    onSuccess: (data) => {
+      queryClient.setQueryData(['student', id], data)
+    }
   })
 
   const updateMutationStudent = useMutation({
     mutationFn: (form: Student) => {
       return updateStudent(id as string, form)
+    },
+    onSuccess: (data) => {
+      queryClient.setQueryData(['student', id], data)
     }
   })
 
-  const { data: dataStudent, isSuccess } = useQuery({
+  const getStudentById = useQuery({
     queryKey: ['student', id],
     queryFn: () => getStudent(id as string),
-    enabled: id !== undefined
+    enabled: id !== undefined,
+    staleTime: 10 * 1000
   })
 
   useEffect(() => {
-    if (isSuccess) {
-      setForm(dataStudent?.data)
+    if (getStudentById.isSuccess) {
+      setForm(getStudentById.data.data)
     }
-  }, [dataStudent, dataStudent?.data, isSuccess])
+  }, [getStudentById.data, getStudentById.isSuccess])
 
   const errorForm: FormError = useMemo(() => {
     const error = isAddMode ? addMutationStudent.error : updateMutationStudent.error
@@ -90,16 +97,14 @@ export default function AddStudent() {
       updateMutationStudent.mutate(form as Student, {
         onSuccess: (_) => {
           toast.success('Update student successfully')
-          setForm(initForm)
         }
       })
     } else {
       addMutationStudent.mutate(
-        form as Omit<Student, 'id'>,
+        undefined,
         {
           onSuccess: (_) => {
             toast.success('Add student successfully')
-            setForm(initForm)
           }
         }
         // ,

@@ -1,9 +1,10 @@
-import { keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
-import { deleteStudent, getStudentList } from 'apis/student.api'
+import { QueryClient, keepPreviousData, useMutation, useQuery } from '@tanstack/react-query'
+import { deleteStudent, getStudent, getStudentList } from 'apis/student.api'
 import classNames from 'classnames'
 
 import { Link } from 'react-router-dom'
 import { toast } from 'react-toastify'
+import { StudentList } from 'types/student.type'
 
 import { useQueryString } from 'utils/util'
 
@@ -22,28 +23,34 @@ export default function Students() {
   //       setIsLoading(false)
   //     })
   // }, [])
-
+  const queryClient = new QueryClient()
   const queryString: { page?: string } = useQueryString()
   const page = Number(queryString.page) || 1
-  const { data, isFetching } = useQuery({
+  const getStudentListQuery = useQuery({
     queryKey: ['students', page], //cơ chế so sánh 2 object là dùng deep compare keys (dùng object nested cỡ nào cũng so sánh được)
-    queryFn: () => getStudentList(page, LIMIT_PAGE),
-    // staleTime: 60 * 1000,//thời gian data cũ
-    gcTime: 5 * 1000, //cache time
-    placeholderData: keepPreviousData
+    queryFn: () => getStudentList(page, LIMIT_PAGE)
+    // staleTime: 60 * 1000, //thời gian data cũ
+    // gcTime: 5 * 1000, //cache time
+    //placeholderData: keepPreviousData //giữ data cũ khi fetch data mới
   }) //đây là query instance
-
-  const totalStudentList = Number(data?.headers['x-total-count'] || 0)
+  console.log(getStudentListQuery)
+  const totalStudentList = Number(getStudentListQuery?.data?.headers['x-total-count'] || 0)
   const totalPage = Math.ceil(totalStudentList / LIMIT_PAGE)
 
   const deleteStudentMutation = useMutation({
-    mutationFn: (id: string | number) => deleteStudent(id)
+    mutationFn: (id: string | number) => deleteStudent(id),
+    onSuccess: (_) => {
+      queryClient.invalidateQueries({ queryKey: ['students', page], exact: true })
+      toast.success('Delete student success')
+    }
   })
 
   const handleDeleteStudent = (id: number) => {
     deleteStudentMutation.mutate(id)
+  }
 
-    toast.success('Delete student success')
+  const handlePreFetchStudent = async (id: number) => {
+    await queryClient.prefetchQuery({ queryKey: ['student', String(id)], queryFn: () => getStudent(id) })
   }
 
   return (
@@ -57,7 +64,7 @@ export default function Students() {
           Add Student
         </Link>
       </div>
-      {isFetching && (
+      {getStudentListQuery.isFetching && (
         <div role='status' className='mt-6 animate-pulse'>
           <div className='mb-4 h-4  rounded bg-gray-200 dark:bg-gray-700' />
           <div className='mb-2.5 h-10  rounded bg-gray-200 dark:bg-gray-700' />
@@ -75,7 +82,7 @@ export default function Students() {
           <span className='sr-only'>Loading...</span>
         </div>
       )}
-      {!isFetching && (
+      {!getStudentListQuery.isFetching && (
         <>
           <div className='relative mt-6 overflow-x-auto shadow-md sm:rounded-lg'>
             <table className='w-full text-left text-sm text-gray-500 dark:text-gray-400'>
@@ -99,10 +106,11 @@ export default function Students() {
                 </tr>
               </thead>
               <tbody>
-                {data?.data.map((student) => (
+                {getStudentListQuery?.data?.data.map((student) => (
                   <tr
                     key={student.id}
                     className='border-b bg-white hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-800 dark:hover:bg-gray-600'
+                    onMouseEnter={() => handlePreFetchStudent(student.id)}
                   >
                     <td className='py-4 px-6'>{student.id}</td>
                     <td className='py-4 px-6'>
